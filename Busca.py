@@ -1,7 +1,15 @@
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 import hashlib
 import requests
 import os
+
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+
+driver = webdriver.Chrome(options=chrome_options)
 
 # Pega o token das variáveis de ambiente do sistema
 TOKEN = os.getenv("8269304939:AAGk-CV9dlyONyRKoiYIWW8Tm3IBAFF9wvo")
