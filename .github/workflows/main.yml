@@ -26,3 +26,11 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python Busca.py
+
+      - name: Salvar progresso (Commit Hash)
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add last_hash.txt
+          git commit -m "Update job hash" || echo "Sem mudanças para salvar"
+          git push

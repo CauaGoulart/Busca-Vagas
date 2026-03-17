@@ -1,47 +1,54 @@
+import hashlib
+import os
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-import hashlib
-import requests
-import os
 
-# Configurações para rodar no GitHub Actions (sem interface gráfica)
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-
-# Inicializa o driver usando o manager para evitar erros de versão
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service, options=chrome_options)
-
-# IMPORTANTE: Use o NOME da variável que você definiu no GitHub Secrets
+# Configurações do ambiente
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+HASH_FILE = "last_hash.txt"
+
+def get_hash(text):
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
 
 def send_alert(message):
-    if TOKEN and CHAT_ID:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
-        requests.get(url)
-    else:
-        print("Erro: Variáveis de ambiente do Telegram não encontradas.")
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
+    requests.get(url)
 
-# Lista de URLs para monitorar
+# Configuração Selenium Headless
+options = Options()
+options.add_argument("--headless")
+driver = webdriver.Chrome(options=options)
+
 urls = ["https://senior.gupy.io/", "https://softplan.gupy.io/"]
+vagas_relevantes = ["Júnior", "Junior", "Pleno", "Java", "Angular"] # Seus focos
 
+content_total = ""
 for url in urls:
-    try:
-        driver.get(url)
-        # Aguarda o carregamento básico da página
-        driver.implicitly_wait(10)
-        content = driver.find_element("tag name", "body").text
+    driver.get(url)
+    driver.implicitly_wait(5)
+    text = driver.find_element("tag name", "body").text.lower()
 
-        # Por enquanto, apenas avisamos que o robô acessou a página com sucesso
-        # No futuro, você pode implementar a lógica de comparação de hash aqui
-        send_alert(f"🤖 O robô verificou a página: {url}")
-
-    except Exception as e:
-        print(f"Erro ao acessar {url}: {e}")
+    # Verifica se as palavras-chave aparecem
+    if any(palavra.lower() in text for palavra in vagas_relevantes):
+        content_total += text
 
 driver.quit()
+
+if content_total:
+    new_hash = get_hash(content_total)
+
+    # Carrega o hash anterior
+    old_hash = ""
+    if os.path.exists(HASH_FILE):
+        with open(HASH_FILE, "r") as f:
+            old_hash = f.read().strip()
+
+    # Só avisa se houver mudança REAL
+    if new_hash != old_hash:
+        with open(HASH_FILE, "w") as f:
+            f.write(new_hash)
+        send_alert("🚀 ATENÇÃO: Novas vagas detectadas em SC para o seu perfil!")
+    else:
+        print("Nenhuma alteração relevante detectada.")
