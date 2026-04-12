@@ -15,9 +15,9 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 HASH_FILE = "hashes.json"
 
-# Foco na sua stack técnica
-TERMO_BUSCA = "empresa de software java SC"
-VAGAS_INTERESSE = ["Júnior", "Junior", "Pleno", "Java", "Angular", "Engenharia de Software"]
+# Suas tecnologias e níveis de interesse [cite: 4, 18]
+# O bot vai pesquisar uma por uma na Rede de Talentos
+PALAVRAS_CHAVE = ["Java", "Angular", "Engenharia de Software", "Programador", "Desenvolvedor"]
 
 def configurar_driver():
     options = Options()
@@ -50,32 +50,44 @@ def rodar_monitor():
     alertas = []
 
     try:
-        # 1. VARREDURA NO GOOGLE JOBS
-        print(f"🔎 Iniciando sweep no Google Jobs para: {TERMO_BUSCA}")
-        url_google = f"https://www.google.com/search?q={TERMO_BUSCA.replace(' ', '+')}&ibp=htl;jobs"
-        driver.get(url_google)
-        time.sleep(random.uniform(4, 7)) # Pausa humana
+        for keyword in PALAVRAS_CHAVE:
+            print(f"🔎 Pesquisando por '{keyword}' na Rede de Talentos...")
+            url_busca = f"https://www.rededetalentos.com.br/vagas?order=&keyword={keyword}"
+            driver.get(url_busca)
+            time.sleep(random.uniform(3, 5)) # Pausa para carregar a lista
 
-        itens_vagas = driver.find_elements(By.CSS_SELECTOR, "[role='listitem']")
+            # Seleciona os cards das vagas baseados na estrutura visual do site
+            # Geralmente são divs que contêm o texto "CÓD." ou o título da vaga
+            cards = driver.find_elements(By.XPATH, "//div[contains(@class, 'card') or .//a[contains(text(), 'Página da vaga')]]")
 
-        for item in itens_vagas[:10]:
-            try:
-                texto_vaga = item.text
-                if any(p.lower() in texto_vaga.lower() for p in VAGAS_INTERESSE):
-                    vaga_id = hashlib.md5(texto_vaga[:100].encode()).hexdigest()
+            for card in cards[:5]: # Foca nas mais recentes de cada busca
+                try:
+                    texto_card = card.text
+                    # Extraímos o Código da Vaga (ex: CÓD. 230379) para ser nosso ID único
+                    if "CÓD." in texto_card:
+                        vaga_id = texto_card.split("CÓD.")[1].split("\n")[0].strip()
 
-                    if old_hashes.get(vaga_id) != "visto":
-                        linhas = texto_vaga.split('\n')
-                        titulo = linhas[0] if len(linhas) > 0 else "Nova Vaga"
-                        empresa = linhas[1] if len(linhas) > 1 else "Empresa não identificada"
+                        if old_hashes.get(vaga_id) != "visto":
+                            linhas = texto_card.split('\n')
+                            titulo = linhas[0] if len(linhas) > 0 else "Nova Vaga"
+                            cidade = "SC"
+                            if "- SC" in texto_card:
+                                cidade = texto_card.split("- SC")[0].split("\n")[-1] + " - SC"
 
-                        alertas.append(f"💼 GOOGLE JOBS - NOVA VAGA!\n📌 {titulo}\n🏢 {empresa}\n📍 Santa Catarina\nLink: {url_google}")
-                        new_hashes[vaga_id] = "visto"
-            except:
-                continue
+                            alertas.append(
+                                f"🎯 REDE DE TALENTOS (ACIC) - NOVA VAGA!\n"
+                                f"📌 {titulo}\n"
+                                f"📍 {cidade.strip()}\n"
+                                f"🆔 CÓD: {vaga_id}\n"
+                                f"🔗 Link: {url_busca}"
+                            )
+                            new_hashes[vaga_id] = "visto"
+                except:
+                    continue
 
     except Exception as e:
-        print(f"❌ Erro no sweep: {e}")
+        print(f"❌ Erro ao acessar Rede de Talentos: {e}")
+
     driver.quit()
 
     if alertas:
@@ -83,9 +95,9 @@ def rodar_monitor():
             send_alert(a)
         with open(HASH_FILE, "w") as f:
             json.dump(new_hashes, f)
-        print(f"✅ {len(alertas)} novas vagas encontradas!")
+        print(f"✅ {len(alertas)} novas vagas locais encontradas!")
     else:
-        print("😴 Sem novidades no Google Jobs.")
+        print("😴 Sem novidades na Rede de Talentos.")
 
 if __name__ == "__main__":
     rodar_monitor()

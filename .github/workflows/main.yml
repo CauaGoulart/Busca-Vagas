@@ -2,8 +2,8 @@ name: Monitor de Vagas Diário
 
 on:
   schedule:
-    - cron: '0 11 * * *'
-  workflow_dispatch:
+    - cron: '0 11 * * *' # Roda às 08:00 no horário de Brasília
+  workflow_dispatch: # Permite rodar manualmente para testar
 
 jobs:
   build:
@@ -27,10 +27,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python Busca.py
 
-      - name: Salvar progresso (Commit Hash)
+      - name: Salvar progresso (Commit JSON)
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add last_hash.txt
-          git commit -m "Update job hash" || echo "Sem mudanças para salvar"
+          # Atualizado para hashes.json para persistir o estado de cada site
+          git add hashes.json
+          git commit -m "Update job hashes [skip ci]" || echo "Sem mudanças para salvar"
           git push
