@@ -15,11 +15,11 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 HASH_FILE = "hashes.json"
 
-# Suas tecnologias e níveis de interesse [cite: 4, 18]
-# O bot vai pesquisar uma por uma na Rede de Talentos
+# Foco na sua stack técnica e região (SC/Criciúma)
 PALAVRAS_CHAVE = ["Java", "Angular", "Engenharia de Software", "Programador", "Desenvolvedor"]
 
 def configurar_driver():
+    """Configuração otimizada para GitHub Actions e anti-detecção."""
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -35,6 +35,7 @@ def configurar_driver():
     return driver
 
 def send_alert(message):
+    """Envia a notificação via API do Telegram."""
     if TOKEN and CHAT_ID:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={message}"
         requests.get(url)
@@ -51,53 +52,64 @@ def rodar_monitor():
 
     try:
         for keyword in PALAVRAS_CHAVE:
-            print(f"🔎 Pesquisando por '{keyword}' na Rede de Talentos...")
+            print(f"🔎 Varrendo '{keyword}' na Rede de Talentos...")
             url_busca = f"https://www.rededetalentos.com.br/vagas?order=&keyword={keyword}"
             driver.get(url_busca)
-            time.sleep(random.uniform(3, 5)) # Pausa para carregar a lista
+            time.sleep(random.uniform(3, 5))
 
-            # Seleciona os cards das vagas baseados na estrutura visual do site
-            # Geralmente são divs que contêm o texto "CÓD." ou o título da vaga
+            # Localiza os cards das vagas
             cards = driver.find_elements(By.XPATH, "//div[contains(@class, 'card') or .//a[contains(text(), 'Página da vaga')]]")
 
-            for card in cards[:5]: # Foca nas mais recentes de cada busca
+            for card in cards[:5]:
                 try:
                     texto_card = card.text
-                    # Extraímos o Código da Vaga (ex: CÓD. 230379) para ser nosso ID único
+
+                    # 1. Extração do Código Único da Vaga
                     if "CÓD." in texto_card:
                         vaga_id = texto_card.split("CÓD.")[1].split("\n")[0].strip()
 
                         if old_hashes.get(vaga_id) != "visto":
+                            # 2. CAPTURA DO LINK DIRETO
+                            try:
+                                link_elemento = card.find_element(By.XPATH, ".//a[contains(text(), 'Página da vaga')]")
+                                link_vaga = link_elemento.get_attribute("href")
+                            except:
+                                link_vaga = url_busca # Fallback caso o link direto não seja encontrado
+
                             linhas = texto_card.split('\n')
                             titulo = linhas[0] if len(linhas) > 0 else "Nova Vaga"
+
                             cidade = "SC"
                             if "- SC" in texto_card:
-                                cidade = texto_card.split("- SC")[0].split("\n")[-1] + " - SC"
+                                cidade = texto_card.split("- SC")[0].split("\n")[-1].strip() + " - SC"
 
+                            # 3. Montagem do Alerta Estratégico
                             alertas.append(
-                                f"🎯 REDE DE TALENTOS (ACIC) - NOVA VAGA!\n"
+                                f"🎯 REDE DE TALENTOS - NOVA VAGA!\n"
                                 f"📌 {titulo}\n"
-                                f"📍 {cidade.strip()}\n"
+                                f"📍 {cidade}\n"
                                 f"🆔 CÓD: {vaga_id}\n"
-                                f"🔗 Link: {url_busca}"
+                                f"🔗 Link Direto: {link_vaga}"
                             )
                             new_hashes[vaga_id] = "visto"
-                except:
+                except Exception as e:
+                    print(f"Erro ao processar card: {e}")
                     continue
 
     except Exception as e:
-        print(f"❌ Erro ao acessar Rede de Talentos: {e}")
+        print(f"❌ Erro ao acessar portal: {e}")
 
     driver.quit()
 
+    # 4. Envio de Notificações e Persistência de Dados
     if alertas:
         for a in alertas:
             send_alert(a)
         with open(HASH_FILE, "w") as f:
             json.dump(new_hashes, f)
-        print(f"✅ {len(alertas)} novas vagas locais encontradas!")
+        print(f"✅ {len(alertas)} alertas enviados!")
     else:
-        print("😴 Sem novidades na Rede de Talentos.")
+        print("😴 Sem novidades na Rede de Talentos hoje.")
 
 if __name__ == "__main__":
     rodar_monitor()
